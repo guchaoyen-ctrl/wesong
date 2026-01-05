@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>數學練功坊 - 教師控制台</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        body { font-family: 'Noto Sans TC', sans-serif; background: #2c3e50; color: white; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; background: #34495e; padding: 30px; border-radius: 10px; }
+        h1 { border-bottom: 2px solid #e74c3c; padding-bottom: 10px; }
+        .card { background: #ecf0f1; color: #333; padding: 20px; border-radius: 8px; margin-top: 20px; }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input, select, textarea { width: 100%; padding: 10px; margin-top: 5px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box;}
+        button { background: #e74c3c; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 16px; margin-top: 15px; }
+        button:hover { background: #c0392b; }
+        .log-box { background: #222; color: #0f0; padding: 10px; font-family: monospace; margin-top: 20px; height: 150px; overflow-y: scroll; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1><i class="fa-solid fa-chalkboard-user"></i> 教師控制台</h1>
+    
+    <div id="loginSection">
+        <div class="card">
+            <h3>系統登入</h3>
+            <label>教師密碼</label>
+            <input type="password" id="tPassword">
+            <button onclick="teacherLogin()">登入</button>
+        </div>
+    </div>
+
+    <div id="mainSection" style="display:none;">
+        <div class="card">
+            <h3>指派新任務</h3>
+            <label>任務名稱/標籤</label>
+            <input type="text" id="taskTags" placeholder="例如: 一元一次方程式">
+            
+            <label>題目數量</label>
+            <input type="number" id="taskCount" value="10">
+            
+            <label>難易度</label>
+            <select id="taskLevel">
+                <option value="C">基礎 (C)</option>
+                <option value="B">進階 (B)</option>
+                <option value="A">挑戰 (A)</option>
+            </select>
+            
+            <button onclick="createTask()">生成任務並儲存</button>
+        </div>
+        
+        <div class="log-box" id="sysLog">系統就緒...</div>
+    </div>
+</div>
+
+<script>
+    // ==========================================
+    // ★★★ 設定區 (已填入您的正式網址) ★★★
+    // ==========================================
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbwg9OdGF4z9VX_wA20K4s7Umj7FWEaMSNmFs1XFaL1BX7RSDKk1bLbJicEEahBdL305pg/exec"; 
+    const LOGIN_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTOp8_OhMQquledyo1XszmXCvpAQdLlmbCtSvoinrOuqOQy1euxLJzvDUpzzPjRFJOrTawtelhlVM7N/pub?gid=777921930&single=true&output=csv";
+    // ==========================================
+
+    function log(msg) {
+        const box = document.getElementById('sysLog');
+        box.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+        box.scrollTop = box.scrollHeight;
+    }
+
+    async function teacherLogin() {
+        const pwd = document.getElementById('tPassword').value;
+        log("正在驗證權限...");
+        
+        try {
+            const res = await fetch(LOGIN_CSV);
+            const txt = await res.text();
+            const data = Papa.parse(txt, {header:true}).data;
+            
+            // 尋找 admin 或 teacher 權限
+            const admin = data.find(r => (r['帳號'] === 'admin' || r['帳號'].includes('teacher')) && r['密碼'] == pwd);
+            
+            if(admin) {
+                log("登入成功！歡迎 " + admin['顯示名稱']);
+                document.getElementById('loginSection').style.display = 'none';
+                document.getElementById('mainSection').style.display = 'block';
+            } else {
+                alert("密碼錯誤或無權限");
+                log("登入失敗");
+            }
+        } catch(e) {
+            log("連線錯誤: " + e);
+        }
+    }
+
+    async function createTask() {
+        const tags = document.getElementById('taskTags').value;
+        const count = document.getElementById('taskCount').value;
+        const level = document.getElementById('taskLevel').value;
+        
+        if(!tags) { alert("請輸入標籤"); return; }
+        
+        log(`正在建立任務: ${tags} (${level})...`);
+        
+        // 產生一個唯一任務ID
+        const taskId = "TASK_" + new Date().getTime();
+        
+        // 準備送給後端的資料 (對應後端 handleSaveAssignment)
+        const payload = {
+            action: 'saveAssignment',
+            mode: 'teacher_assign',
+            level: level,
+            count: count,
+            tags: tags,
+            link: taskId, 
+            taskId: taskId
+        };
+
+        try {
+            await fetch(GAS_URL, {
+                method: 'POST',
+                mode: 'no-cors', 
+                body: JSON.stringify(payload)
+            });
+            
+            log("✅ 任務已儲存！ID: " + taskId);
+            alert("任務發布成功！\n任務ID: " + taskId);
+        } catch(e) {
+            log("❌ 儲存失敗: " + e);
+        }
+    }
+</script>
+</body>
+</html>

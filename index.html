@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>數學練功坊 - V50.29 (雲端正式版)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root { --primary: #4361ee; --bg: #f0f2f5; --card: #ffffff; --success: #00b894; --error: #ff7675; }
+        body { font-family: 'Noto Sans TC', sans-serif; background: var(--bg); margin: 0; padding: 20px; display: flex; justify-content: center; min-height: 100vh; }
+        .container { background: var(--card); padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 800px; text-align: center; margin-top: 20px;}
+        h1 { color: var(--primary); margin-bottom: 20px; }
+        
+        /* 登入區塊 */
+        .login-box { max-width: 400px; margin: 0 auto; }
+        .input-group { margin-bottom: 15px; text-align: left; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
+        input, select { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; box-sizing: border-box; }
+        button { background: var(--primary); color: white; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; padding: 12px; width: 100%; border-radius: 8px; font-size: 16px; margin-top: 10px; }
+        button:hover { background: #304ffe; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        
+        /* 隱藏/顯示 */
+        .hidden { display: none !important; }
+        
+        /* 練功區塊 */
+        .status-bar { display: flex; justify-content: space-between; background: #eef2ff; padding: 10px 20px; border-radius: 8px; margin-bottom: 20px; color: #444; font-weight: bold; }
+        .question-card { text-align: left; padding: 20px; background: #fafafa; border-radius: 8px; border: 1px solid #eee; margin-bottom: 20px; }
+        .question-text { font-size: 1.2em; margin-bottom: 15px; line-height: 1.6; }
+        .option-btn { margin-top: 10px; background: white; color: #333; border: 2px solid #eee; text-align: left; }
+        .option-btn:hover { border-color: var(--primary); color: var(--primary); background: #f0f7ff; }
+        
+        /* 結果區塊 */
+        .score-text { font-size: 2.5em; font-weight: 900; color: var(--primary); margin: 10px 0; }
+        
+        #errorMsg { color: var(--error); margin-top: 10px; font-size: 0.9em; min-height: 20px; }
+        .loading-spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; margin-right: 10px; vertical-align: middle; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div class="container" id="loginView">
+    <h1><i class="fa-solid fa-shapes"></i> 數學練功坊</h1>
+    <div class="login-box">
+        <div class="input-group">
+            <label>帳號</label>
+            <input type="text" id="username" placeholder="請輸入帳號 (例如: h01)">
+        </div>
+        <div class="input-group">
+            <label>密碼</label>
+            <input type="password" id="password" placeholder="請輸入密碼">
+        </div>
+        <button onclick="handleLogin()" id="loginBtn">登入系統</button>
+        <p id="errorMsg"></p>
+    </div>
+</div>
+
+<div class="container hidden" id="menuView">
+    <div class="status-bar">
+        <span id="welcomeName">同學好</span>
+        <button onclick="logout()" style="width: auto; padding: 5px 10px; font-size: 14px; margin: 0; background: #666;">登出</button>
+    </div>
+    <h2>選擇練功範圍</h2>
+    <div class="input-group">
+        <label>選擇知識點</label>
+        <select id="topicSelect"><option>載入中...</option></select>
+    </div>
+    <div class="input-group">
+        <label>難易度</label>
+        <select id="levelSelect">
+            <option value="A">Level A (挑戰)</option>
+            <option value="B">Level B (進階)</option>
+            <option value="C" selected>Level C (基礎)</option>
+        </select>
+    </div>
+    <button onclick="startPractice()">開始練功</button>
+</div>
+
+<div class="container hidden" id="quizView">
+    <div class="status-bar">
+        <span id="quizUser"></span>
+        <span id="quizScore">答對: 0</span>
+    </div>
+    <div id="qContainer"></div>
+</div>
+
+<div class="container hidden" id="resultView">
+    <h1><i class="fa-solid fa-trophy"></i> 練功完成</h1>
+    <div id="finalResultContent"></div>
+    <button onclick="location.reload()">返回首頁</button>
+</div>
+
+<script>
+    // ==========================================
+    // ★★★ 設定區 (已填入您的正式網址) ★★★
+    // ==========================================
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbwg9OdGF4z9VX_wA20K4s7Umj7FWEaMSNmFs1XFaL1BX7RSDKk1bLbJicEEahBdL305pg/exec"; 
+    const LOGIN_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTOp8_OhMQquledyo1XszmXCvpAQdLlmbCtSvoinrOuqOQy1euxLJzvDUpzzPjRFJOrTawtelhlVM7N/pub?gid=777921930&single=true&output=csv";
+    // ==========================================
+
+    let currentUser = null;
+    let questions = [];
+    let currentQIndex = 0;
+    let correctCount = 0;
+
+    // --- 登入邏輯 ---
+    async function handleLogin() {
+        const u = document.getElementById('username').value.trim();
+        const p = document.getElementById('password').value.trim();
+        const btn = document.getElementById('loginBtn');
+        const msg = document.getElementById('errorMsg');
+
+        if (!u || !p) { msg.innerText = "請輸入帳號與密碼"; return; }
+        
+        btn.disabled = true;
+        btn.innerHTML = '<span class="loading-spinner"></span>驗證中...';
+        msg.innerText = "";
+
+        try {
+            // 讀取 CSV 進行驗證
+            const res = await fetch(LOGIN_CSV);
+            const csvText = await res.text();
+            const parsed = Papa.parse(csvText, {header: true, skipEmptyLines: true}).data;
+            
+            const userObj = parsed.find(row => 
+                row['帳號'] && row['帳號'].trim() === u && 
+                (row['密碼'] && row['密碼'].toString().trim() == p)
+            );
+
+            if (userObj) {
+                currentUser = userObj;
+                currentUser.name = userObj['顯示名稱'] || u;
+                
+                // 向後端註冊 Session (保留原有功能)
+                fetch(GAS_URL, {
+                    method: 'POST', mode: 'no-cors',
+                    body: JSON.stringify({ action: 'registerLogin', user: u })
+                });
+
+                showMenu();
+            } else {
+                throw new Error("帳號或密碼錯誤");
+            }
+        } catch (e) {
+            msg.innerText = e.message || "登入失敗，請檢查網路";
+            btn.disabled = false;
+            btn.innerText = "登入系統";
+        }
+    }
+
+    // --- 選單與資料讀取 ---
+    function showMenu() {
+        document.getElementById('loginView').classList.add('hidden');
+        document.getElementById('menuView').classList.remove('hidden');
+        document.getElementById('welcomeName').innerText = `嗨，${currentUser.name}`;
+        loadMetadata();
+    }
+
+    async function loadMetadata() {
+        const sel = document.getElementById('topicSelect');
+        try {
+            const res = await fetch(GAS_URL + "?action=getMetadata");
+            const data = await res.json();
+            if(data.status === 'success') {
+                sel.innerHTML = "";
+                // 優先使用「知識點 (kps)」以符合後端預設邏輯
+                const allOptions = data.kps || [];
+                if(allOptions.length === 0) sel.innerHTML = "<option>無可用的知識點</option>";
+                
+                allOptions.forEach(opt => {
+                    const el = document.createElement('option');
+                    el.value = opt;
+                    el.innerText = opt;
+                    sel.appendChild(el);
+                });
+            }
+        } catch(e) {
+            sel.innerHTML = "<option>讀取失敗，請重新整理</option>";
+            console.error(e);
+        }
+    }
+
+    // --- 練功邏輯 ---
+    async function startPractice() {
+        const topic = document.getElementById('topicSelect').value;
+        const level = document.getElementById('levelSelect').value;
+        const btn = document.querySelector('#menuView button');
+        
+        btn.disabled = true;
+        btn.innerText = "題目載入中...";
+
+        try {
+            // 保留原有的資料傳輸結構
+            const payload = {
+                action: 'getQuestions',
+                tags: topic,
+                level: level,
+                count: 10,
+                source: 'ALL'
+            };
+            
+            const res = await fetch(GAS_URL, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            
+            if(data.status === 'success' && data.questions && data.questions.length > 0) {
+                questions = data.questions;
+                currentQIndex = 0;
+                correctCount = 0;
+                document.getElementById('menuView').classList.add('hidden');
+                document.getElementById('quizView').classList.remove('hidden');
+                renderQuestion();
+            } else {
+                alert("此範圍目前沒有題目，請換一個試試看！");
+                btn.disabled = false;
+                btn.innerText = "開始練功";
+            }
+        } catch(e) {
+            alert("連線錯誤：" + e);
+            btn.disabled = false;
+            btn.innerText = "開始練功";
+        }
+    }
+
+    function renderQuestion() {
+        if(currentQIndex >= questions.length) {
+            showResult();
+            return;
+        }
+        
+        const q = questions[currentQIndex];
+        const container = document.getElementById('qContainer');
+        document.getElementById('quizUser').innerText = currentUser.name;
+        document.getElementById('quizScore').innerText = `進度: ${currentQIndex+1}/${questions.length}`;
+
+        let html = `
+            <div class="question-card">
+                <div class="question-text">${q.txt}</div>
+                ${q.img ? `<img src="${q.img}" style="max-width:100%;border-radius:8px;margin-bottom:10px;">` : ''}
+                <hr style="border:0;border-top:1px solid #eee;margin:15px 0;">
+                <p style="color:#666;font-size:0.9em;">(請在心中計算後點擊下方按鈕查看答案)</p>
+                <div id="ansArea">
+                    <button onclick="checkSelf(true)" class="option-btn" style="text-align:center;border-color:var(--success);color:var(--success)">✅ 我算對了</button>
+                    <button onclick="checkSelf(false)" class="option-btn" style="text-align:center;border-color:var(--error);color:var(--error)">❌ 我算錯了</button>
+                    <div style="margin-top:15px;font-weight:bold;color:#333;">標準答案：${q.ans}</div>
+                </div>
+            </div>
+        `;
+        container.innerHTML = html;
+    }
+
+    function checkSelf(isCorrect) {
+        if(isCorrect) correctCount++;
+        saveRecord(questions[currentQIndex], isCorrect);
+        currentQIndex++;
+        renderQuestion();
+    }
+
+    function saveRecord(q, isRight) {
+        // 嚴格遵守後端 handleWriteRequest 的欄位需求
+        const payload = {
+            action: 'saveRecord',
+            user: currentUser['帳號'],
+            username: currentUser.name,
+            topic: q.cat || '綜合練習',
+            level: document.getElementById('levelSelect').value,
+            result: isRight ? 'CORRECT' : 'WRONG',
+            qId: q.qId,
+            userAns: isRight ? q.ans : 'wrong',
+            correctAns: q.ans
+        };
+        // 使用 no-cors 模式以避免跨域問題，這是 GAS 傳送數據的標準做法
+        fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
+    }
+
+    function showResult() {
+        document.getElementById('quizView').classList.add('hidden');
+        document.getElementById('resultView').classList.remove('hidden');
+        const score = Math.round((correctCount / questions.length) * 100);
+        
+        let msg = score >= 80 ? "太棒了！繼續保持！" : "再接再厲，下次會更好！";
+        if(score >= 80) confetti();
+
+        document.getElementById('finalResultContent').innerHTML = `
+            <div class="score-text">${score} 分</div>
+            <p>${msg}</p>
+            <p>共 ${questions.length} 題，答對 ${correctCount} 題</p>
+        `;
+    }
+
+    function logout() { location.reload(); }
+</script>
+</body>
+</html>
